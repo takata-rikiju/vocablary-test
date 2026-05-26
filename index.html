@@ -239,8 +239,14 @@ function removeBrackets(s) {
   return s.replace(/（[^）]*）/g, '').replace(/\([^)]*\)/g, '').replace(/［[^］]*］/g, '').replace(/\[[^\]]*\]/g, '').trim();
 }
 
+function removeParticles(s) {
+  // 先頭の「〜を」「〜に」「〜の」「〜が」などの助詞プレフィックスを除去
+  return s.replace(/^[〜～]?[をにのがとでへはもや]/, '').trim();
+}
+
 function normalize(s) {
-  return s.trim().toLowerCase().replace(/[　\s]+/g, '').replace(/[・、。，,]/g, '').replace(/[～〜]/g, '');
+  const cleaned = removeParticles(s.trim());
+  return cleaned.toLowerCase().replace(/[　\s]+/g, '').replace(/[・、。，,]/g, '').replace(/[～〜]/g, '');
 }
 
 function getAnswers(jaStr) {
