@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ホワイトアカデミー高等部英単語テスト</title>
+<title>ホワイトアカデミー高等部：英単語テスト</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Yu Gothic', sans-serif; background: #f5f4f0; color: #1a1a1a; min-height: 100vh; }
@@ -64,7 +64,7 @@ input.checking { border-color: #f59e0b; background: #fffbeb; }
 <div class="wrap">
 
 <div id="screen-start" class="screen active">
-  <h1>ホワイトアカデミー高等部英単語テスト</h1>
+  <h1>ホワイトアカデミー高等部：英単語テスト</h1>
   <div class="card">
     <p style="font-size:0.95rem;line-height:1.8;color:#444;">
       ・ランダムに100問出題します<br>
@@ -221,10 +221,39 @@ function renderQ() {
   inp.focus();
 }
 
+function removeBrackets(s) {
+  return s.replace(/（[^）]*）/g, '').replace(/\([^)]*\)/g, '').replace(/［[^］]*］/g, '').replace(/\[[^\]]*\]/g, '').trim();
+}
+
+function removeParticles(s) {
+  return s.replace(/^[〜～]?[をにのがとでへはもや]/, '').trim();
+}
+
+function normalizeJa(s) {
+  // 括弧除去→助詞除去→カンマ分割して候補セットを返す
+  const candidates = new Set();
+  const noBracket = removeBrackets(s);
+  noBracket.split(/[、,，]/).map(t => removeParticles(t.trim())).filter(Boolean)
+    .forEach(t => candidates.add(t.toLowerCase().replace(/[　\s・。]/g, '')));
+  s.split(/[、,，]/).map(t => removeParticles(removeBrackets(t).trim())).filter(Boolean)
+    .forEach(t => candidates.add(t.toLowerCase().replace(/[　\s・。]/g, '')));
+  return candidates;
+}
+
 async function judgeWithAI(userAns, correctAns, wordEn, type) {
+  // まず文字列マッチで正解なら即return（APIコスト節約＆高速化）
+  if (type === 'en-ja') {
+    const candidates = normalizeJa(correctAns);
+    const user = removeParticles(removeBrackets(userAns)).toLowerCase().replace(/[　\s・。]/g, '');
+    if (candidates.has(user)) return true;
+  } else {
+    if (userAns.trim().toLowerCase() === wordEn.trim().toLowerCase()) return true;
+  }
+
+  // 文字列マッチで不正解の場合のみAI判定
   const prompt = type === 'en-ja'
-    ? `英単語「${wordEn}」の日本語訳として、「${correctAns}」が正解です。生徒の回答「${userAns}」は正解と同じ意味ですか？漢字とひらがなの違いや表現のゆれは正解とみなしてください。「correct」か「wrong」の1単語だけ答えてください。`
-    : `日本語「${correctAns}」の英訳として、「${wordEn}」が正解です。生徒の回答「${userAns}」は正解と同じ意味ですか？スペルミスは不正解としてください。「correct」か「wrong」の1単語だけ答えてください。`;
+    ? `英単語「${wordEn}」の日本語訳として「${correctAns}」が正解です。生徒の回答「${userAns}」は正解と同じ意味ですか？漢字とひらがなの違いや表現のゆれは正解とみなしてください。必ず「correct」か「wrong」の1単語だけ答えてください。`
+    : `日本語「${correctAns}」の英訳として「${wordEn}」が正解です。生徒の回答「${userAns}」は正解と同じ意味ですか？スペルミスは不正解としてください。必ず「correct」か「wrong」の1単語だけ答えてください。`;
   try {
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${GEMINI_API_KEY}`, {
       method: 'POST',
@@ -236,7 +265,12 @@ async function judgeWithAI(userAns, correctAns, wordEn, type) {
     return text.includes('correct');
   } catch(e) {
     // API失敗時はフォールバックで文字列マッチ
-    return normalize(userAns) === normalize(correctAns);
+    if (type === 'en-ja') {
+      return normalizeJa(correctAns).has(
+        removeParticles(removeBrackets(userAns)).toLowerCase().replace(/[　\s・。]/g, '')
+      );
+    }
+    return userAns.trim().toLowerCase() === wordEn.trim().toLowerCase();
   }
 }
 
